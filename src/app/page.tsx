@@ -34,10 +34,10 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [notification, setNotification] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -88,10 +88,10 @@ export default function Home() {
     }
   }, [activeTab]);
 
-  const handleDelete = async (id: string) => {
-    setDeletingIds(prev => new Set(prev).add(id));
+  const handleDeleteAllNormalized = async () => {
+    setIsDeleting(true);
     try {
-      const response = await fetch(`${baseUrl}/api/transactions/${id}`, {
+      const response = await fetch(`${baseUrl}/api/analyze/merchant`, {
         method: 'DELETE',
       });
       
@@ -99,17 +99,34 @@ export default function Home() {
         throw new Error('Delete failed');
       }
       
-      setTransactions(prev => prev.filter(t => t._id !== id));
-      showNotification('success', 'Transaction deleted successfully');
+      setTransactions([]);
+      showNotification('success', 'All normalized transactions deleted successfully');
     } catch (error) {
-      console.error('Error deleting transaction:', error);
-      showNotification('error', 'Failed to delete transaction');
+      console.error('Error deleting transactions:', error);
+      showNotification('error', 'Failed to delete transactions');
     } finally {
-      setDeletingIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(id);
-        return newSet;
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteAllPatterns = async () => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`${baseUrl}/api/analyze/patterns`, {
+        method: 'DELETE',
       });
+      
+      if (!response.ok) {
+        throw new Error('Delete failed');
+      }
+      
+      setPatterns([]);
+      showNotification('success', 'All patterns deleted successfully');
+    } catch (error) {
+      console.error('Error deleting patterns:', error);
+      showNotification('error', 'Failed to delete patterns');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -258,19 +275,34 @@ export default function Home() {
         <div className="mt-6">
           {activeTab === 'merchant' && (
             <div className="bg-white shadow sm:rounded-lg p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Merchant Analysis</h2>
-              <p className="text-sm text-gray-500 mb-4">
-                Analyze and normalize merchant names and categories.
-              </p>
-              <button
-                onClick={handleMerchantAnalysis}
-                disabled={isAnalyzing}
-                className={`px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 ${
-                  isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {isAnalyzing ? 'Analyzing...' : 'Run Merchant Analysis'}
-              </button>
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-lg font-medium text-gray-900">Merchant Analysis</h2>
+                  <p className="text-sm text-gray-500">
+                    Analyze and normalize merchant names and categories.
+                  </p>
+                </div>
+                <div className="flex space-x-4">
+                  <button
+                    onClick={handleMerchantAnalysis}
+                    disabled={isAnalyzing}
+                    className={`px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 ${
+                      isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {isAnalyzing ? 'Analyzing...' : 'Run Merchant Analysis'}
+                  </button>
+                  <button
+                    onClick={handleDeleteAllNormalized}
+                    disabled={isDeleting || transactions.length === 0}
+                    className={`px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 ${
+                      isDeleting || transactions.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {isDeleting ? 'Deleting...' : 'Delete All'}
+                  </button>
+                </div>
+              </div>
 
               {/* Transactions List */}
               <div className="mt-6">
@@ -296,9 +328,6 @@ export default function Home() {
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Date
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Actions
-                          </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -316,17 +345,6 @@ export default function Home() {
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {new Date(transaction.date).toLocaleDateString()}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              <button
-                                onClick={() => handleDelete(transaction._id)}
-                                disabled={deletingIds.has(transaction._id)}
-                                className={`text-red-600 hover:text-red-900 ${
-                                  deletingIds.has(transaction._id) ? 'opacity-50 cursor-not-allowed' : ''
-                                }`}
-                              >
-                                {deletingIds.has(transaction._id) ? 'Deleting...' : 'Delete'}
-                              </button>
-                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -339,19 +357,34 @@ export default function Home() {
 
           {activeTab === 'pattern' && (
             <div className="bg-white shadow sm:rounded-lg p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Pattern Detection</h2>
-              <p className="text-sm text-gray-500 mb-4">
-                Detect recurring payments and subscription patterns.
-              </p>
-              <button
-                onClick={handlePatternDetection}
-                disabled={isDetecting}
-                className={`px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 ${
-                  isDetecting ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {isDetecting ? 'Detecting...' : 'Run Pattern Detection'}
-              </button>
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-lg font-medium text-gray-900">Pattern Detection</h2>
+                  <p className="text-sm text-gray-500">
+                    Detect recurring payments and subscription patterns.
+                  </p>
+                </div>
+                <div className="flex space-x-4">
+                  <button
+                    onClick={handlePatternDetection}
+                    disabled={isDetecting}
+                    className={`px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 ${
+                      isDetecting ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {isDetecting ? 'Detecting...' : 'Run Pattern Detection'}
+                  </button>
+                  <button
+                    onClick={handleDeleteAllPatterns}
+                    disabled={isDeleting || patterns.length === 0}
+                    className={`px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 ${
+                      isDeleting || patterns.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {isDeleting ? 'Deleting...' : 'Delete All'}
+                  </button>
+                </div>
+              </div>
 
               {/* Patterns List */}
               <div className="mt-6">
