@@ -1,12 +1,43 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+interface Transaction {
+  _id: string;
+  normalized: {
+    merchant: string;
+    category: string;
+    sub_category: string;
+    confidence: number;
+    is_subscription: boolean;
+    flags: string[];
+  };
+  amount: number;
+  date: string;
+}
+
+interface Pattern {
+  _id: string;
+  type: string;
+  merchant: string;
+  amount: number;
+  frequency: string;
+  confidence: number;
+  next_expected: string;
+  last_occurrence: string;
+  occurrence_count: number;
+  is_active: boolean;
+}
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('merchant');
   const [isUploading, setIsUploading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [patterns, setPatterns] = useState<Pattern[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [notification, setNotification] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -17,6 +48,69 @@ export default function Home() {
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 3000);
+  };
+
+  const fetchTransactions = async () => {
+    try {
+      const response = await fetch(`${baseUrl}/api/analyze/merchant`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch transactions');
+      }
+      const data = await response.json();
+      setTransactions(data);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      showNotification('error', 'Failed to fetch transactions');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchPatterns = async () => {
+    try {
+      const response = await fetch(`${baseUrl}/api/analyze/patterns`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch patterns');
+      }
+      const data = await response.json();
+      setPatterns(data.patterns);
+    } catch (error) {
+      console.error('Error fetching patterns:', error);
+      showNotification('error', 'Failed to fetch patterns');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'merchant') {
+      fetchTransactions();
+    } else {
+      fetchPatterns();
+    }
+  }, [activeTab]);
+
+  const handleDelete = async (id: string) => {
+    setDeletingIds(prev => new Set(prev).add(id));
+    try {
+      const response = await fetch(`${baseUrl}/api/transactions/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Delete failed');
+      }
+      
+      setTransactions(prev => prev.filter(t => t._id !== id));
+      showNotification('success', 'Transaction deleted successfully');
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      showNotification('error', 'Failed to delete transaction');
+    } finally {
+      setDeletingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+    }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,6 +132,7 @@ export default function Home() {
       }
       
       showNotification('success', 'File uploaded successfully');
+      fetchTransactions();
     } catch (error) {
       console.error('Error uploading file:', error);
       showNotification('error', 'Failed to upload file');
@@ -63,6 +158,7 @@ export default function Home() {
       const data = await response.json();
       console.log('Merchant analysis result:', data);
       showNotification('success', 'Merchant analysis completed');
+      fetchTransactions();
     } catch (error) {
       console.error('Error during merchant analysis:', error);
       showNotification('error', 'Failed to analyze merchants');
@@ -88,6 +184,7 @@ export default function Home() {
       const data = await response.json();
       console.log('Pattern detection result:', data);
       showNotification('success', 'Pattern detection completed');
+      fetchPatterns();
     } catch (error) {
       console.error('Error during pattern detection:', error);
       showNotification('error', 'Failed to detect patterns');
@@ -174,6 +271,69 @@ export default function Home() {
               >
                 {isAnalyzing ? 'Analyzing...' : 'Run Merchant Analysis'}
               </button>
+
+              {/* Transactions List */}
+              <div className="mt-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Normalized Transactions</h3>
+                {isLoading ? (
+                  <p className="text-gray-500">Loading transactions...</p>
+                ) : transactions.length === 0 ? (
+                  <p className="text-gray-500">No transactions found</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Merchant
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Category
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Amount
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {transactions.map((transaction) => (
+                          <tr key={transaction._id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {transaction.normalized.merchant}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {transaction.normalized.category}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              ${transaction.amount.toFixed(2)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {new Date(transaction.date).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <button
+                                onClick={() => handleDelete(transaction._id)}
+                                disabled={deletingIds.has(transaction._id)}
+                                className={`text-red-600 hover:text-red-900 ${
+                                  deletingIds.has(transaction._id) ? 'opacity-50 cursor-not-allowed' : ''
+                                }`}
+                              >
+                                {deletingIds.has(transaction._id) ? 'Deleting...' : 'Delete'}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -192,6 +352,71 @@ export default function Home() {
               >
                 {isDetecting ? 'Detecting...' : 'Run Pattern Detection'}
               </button>
+
+              {/* Patterns List */}
+              <div className="mt-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Detected Patterns</h3>
+                {patterns.length === 0 ? (
+                  <p className="text-gray-500">No patterns detected</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Type
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Merchant
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Amount
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Frequency
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Next Expected
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {patterns.map((pattern) => (
+                          <tr key={pattern._id}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {pattern.type}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {pattern.merchant}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              ${pattern.amount.toFixed(2)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {pattern.frequency}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {new Date(pattern.next_expected).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                pattern.is_active 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {pattern.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
