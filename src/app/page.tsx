@@ -28,7 +28,7 @@ export default function Home() {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${baseUrl}/transaction-upload/upload`, {
+      const response = await fetch(`${baseUrl}/api/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -49,7 +49,7 @@ export default function Home() {
   const handleMerchantAnalysis = async () => {
     setIsAnalyzing(true);
     try {
-      const response = await fetch(`${baseUrl}/transfer-normalizer/analyze`, {
+      const response = await fetch(`${baseUrl}/api/analyze/merchant`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -74,7 +74,7 @@ export default function Home() {
   const handlePatternDetection = async () => {
     setIsDetecting(true);
     try {
-      const response = await fetch(`${baseUrl}/pattern-analyzer/analyze`, {
+      const response = await fetch(`${baseUrl}/api/analyze/patterns`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
