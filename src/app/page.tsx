@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 
 interface Transaction {
-  _id: string;
+  original: string;
+  amount: number;
   normalized: {
     merchant: string;
     category: string;
@@ -12,8 +13,6 @@ interface Transaction {
     is_subscription: boolean;
     flags: string[];
   };
-  amount: number;
-  date: string;
 }
 
 interface Pattern {
@@ -57,7 +56,7 @@ export default function Home() {
         throw new Error('Failed to fetch transactions');
       }
       const data = await response.json();
-      setTransactions(data);
+      setTransactions(data.normalized_transactions);
     } catch (error) {
       console.error('Error fetching transactions:', error);
       showNotification('error', 'Failed to fetch transactions');
@@ -173,9 +172,8 @@ export default function Home() {
       }
       
       const data = await response.json();
-      console.log('Merchant analysis result:', data);
+      setTransactions(data.normalized_transactions);
       showNotification('success', 'Merchant analysis completed');
-      fetchTransactions();
     } catch (error) {
       console.error('Error during merchant analysis:', error);
       showNotification('error', 'Failed to analyze merchants');
@@ -317,22 +315,37 @@ export default function Home() {
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Original
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Merchant
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Category
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Amount
+                            Sub Category
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date
+                            Confidence
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Subscription
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Flags
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Amount
                           </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {transactions.map((transaction) => (
-                          <tr key={transaction._id}>
+                        {transactions.map((transaction, index) => (
+                          <tr key={index}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {transaction.original}
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {transaction.normalized.merchant}
                             </td>
@@ -340,10 +353,25 @@ export default function Home() {
                               {transaction.normalized.category}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              ${transaction.amount.toFixed(2)}
+                              {transaction.normalized.sub_category}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {new Date(transaction.date).toLocaleDateString()}
+                              {(transaction.normalized.confidence * 100).toFixed(0)}%
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {transaction.normalized.is_subscription ? 'Yes' : 'No'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <div className="flex flex-wrap gap-1">
+                                {transaction.normalized.flags.map((flag, index) => (
+                                  <span key={index} className="px-2 py-1 text-xs rounded-full bg-gray-100">
+                                    {flag}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              ${transaction.amount.toFixed(2)}
                             </td>
                           </tr>
                         ))}
