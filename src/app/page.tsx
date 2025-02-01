@@ -16,16 +16,12 @@ interface Transaction {
 }
 
 interface Pattern {
-  _id: string;
   type: string;
   merchant: string;
   amount: number;
   frequency: string;
   confidence: number;
   next_expected: string;
-  last_occurrence: string;
-  occurrence_count: number;
-  is_active: boolean;
 }
 
 export default function Home() {
@@ -86,48 +82,6 @@ export default function Home() {
       fetchPatterns();
     }
   }, [activeTab]);
-
-  const handleDeleteAllNormalized = async () => {
-    setIsDeleting(true);
-    try {
-      const response = await fetch(`${baseUrl}/api/analyze/merchant`, {
-        method: 'DELETE',
-      });
-      
-      if (!response.ok) {
-        throw new Error('Delete failed');
-      }
-      
-      setTransactions([]);
-      showNotification('success', 'All normalized transactions deleted successfully');
-    } catch (error) {
-      console.error('Error deleting transactions:', error);
-      showNotification('error', 'Failed to delete transactions');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleDeleteAllPatterns = async () => {
-    setIsDeleting(true);
-    try {
-      const response = await fetch(`${baseUrl}/api/analyze/patterns`, {
-        method: 'DELETE',
-      });
-      
-      if (!response.ok) {
-        throw new Error('Delete failed');
-      }
-      
-      setPatterns([]);
-      showNotification('success', 'All patterns deleted successfully');
-    } catch (error) {
-      console.error('Error deleting patterns:', error);
-      showNotification('error', 'Failed to delete patterns');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -238,6 +192,29 @@ export default function Home() {
                 className="hidden"
               />
             </label>
+            <button
+              onClick={async () => {
+                setIsDeleting(true);
+                try {
+                  await Promise.all([
+                    fetch(`${baseUrl}/api/analyze/merchant`, { method: 'DELETE' }),
+                    fetch(`${baseUrl}/api/analyze/patterns`, { method: 'DELETE' }),
+                    fetch(`${baseUrl}/api/upload`, { method: 'DELETE' })
+                  ]);
+                  setTransactions([]);
+                  setPatterns([]);
+                  showNotification('success', 'All transactions, patterns, and data deleted successfully');
+                } catch (error) {
+                  console.error('Error deleting data:', error);
+                  showNotification('error', 'Failed to delete data');
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+              className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete All'}
+            </button>
           </div>
         </div>
       </div>
@@ -289,15 +266,6 @@ export default function Home() {
                     }`}
                   >
                     {isAnalyzing ? 'Analyzing...' : 'Run Merchant Analysis'}
-                  </button>
-                  <button
-                    onClick={handleDeleteAllNormalized}
-                    disabled={isDeleting || transactions.length === 0}
-                    className={`px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 ${
-                      isDeleting || transactions.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    {isDeleting ? 'Deleting...' : 'Delete All'}
                   </button>
                 </div>
               </div>
@@ -402,15 +370,6 @@ export default function Home() {
                   >
                     {isDetecting ? 'Detecting...' : 'Run Pattern Detection'}
                   </button>
-                  <button
-                    onClick={handleDeleteAllPatterns}
-                    disabled={isDeleting || patterns.length === 0}
-                    className={`px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 ${
-                      isDeleting || patterns.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    {isDeleting ? 'Deleting...' : 'Delete All'}
-                  </button>
                 </div>
               </div>
 
@@ -440,13 +399,13 @@ export default function Home() {
                             Next Expected
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
+                            Confidence
                           </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {patterns.map((pattern) => (
-                          <tr key={pattern._id}>
+                          <tr key={`${pattern.merchant}-${pattern.amount}-${pattern.frequency}`}>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {pattern.type}
                             </td>
@@ -462,14 +421,8 @@ export default function Home() {
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {new Date(pattern.next_expected).toLocaleDateString()}
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                pattern.is_active 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-red-100 text-red-800'
-                              }`}>
-                                {pattern.is_active ? 'Active' : 'Inactive'}
-                              </span>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {(pattern.confidence * 100).toFixed(0)}%
                             </td>
                           </tr>
                         ))}
